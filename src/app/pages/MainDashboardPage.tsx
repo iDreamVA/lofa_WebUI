@@ -3,12 +3,22 @@ import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingDown, ThermometerSun, Mountain, Wind, Gauge, TriangleAlert, CheckCircle2, AlertCircle } from 'lucide-react';
+import { TrendingDown, ThermometerSun, Mountain, Wind, Gauge, TriangleAlert, CheckCircle2, AlertCircle, Activity } from 'lucide-react';
 
 const MQTT_BRIDGE_URL =
   import.meta.env.VITE_MQTT_BRIDGE_URL || 'ws://localhost:8080/stream';
+const MQTT_BRIDGE_HTTP_URL =
+  import.meta.env.VITE_MQTT_BRIDGE_HTTP_URL ||
+  MQTT_BRIDGE_URL.replace(/^ws/, 'http').replace(/\/stream$/, '');
 const HISTORY_LIMIT = 180;
 const BASELINE_SAMPLES = 120;
+const HISTORY_PERIODS = [
+  { value: '15m', label: '15m' },
+  { value: '1h', label: '1h' },
+  { value: '6h', label: '6h' },
+  { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' },
+];
 
 type MotionSample = {
   ax?: number;
@@ -66,6 +76,15 @@ type BridgePacket =
     };
 
 type StatusLevel = 'green' | 'yellow' | 'red';
+
+type HistoryPoint = {
+  time: string;
+  activityMode: string;
+  confidence: number;
+  fatigueRun: number;
+  tempC?: number;
+  iaq?: number;
+};
 
 type MetricStatus = {
   level: StatusLevel;
@@ -250,6 +269,10 @@ export function MainDashboardPage() {
   const [currentAqi, setCurrentAqi] = useState(0);
   const [currentEco2, setCurrentEco2] = useState(0);
   const [prediction, setPrediction] = useState<PredictionSample | null>(null);
+  const [historyPeriod, setHistoryPeriod] = useState('1h');
+  const [historyData, setHistoryData] = useState<HistoryPoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket(MQTT_BRIDGE_URL);
@@ -308,6 +331,57 @@ export function MainDashboardPage() {
 
     return () => socket.close();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHistory() {
+      setHistoryLoading(true);
+      setHistoryError(null);
+
+      try {
+        const response = await fetch(
+          `${MQTT_BRIDGE_HTTP_URL}/history?period=${encodeURIComponent(historyPeriod)}`
+        );
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'History request failed');
+        }
+
+        if (cancelled) return;
+
+        setHistoryData(
+          data.rows.map((row: Record<string, unknown>) => {
+            const eventTime = new Date(String(row.event_time));
+            return {
+              time: eventTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              activityMode: String(row.predicted_label || ''),
+              confidence: Number(row.confidence || 0),
+              fatigueRun: Number(row.prob_fatigue_run || 0),
+              tempC: row.temp_c == null ? undefined : Number(row.temp_c),
+              iaq: row.iaq == null ? undefined : Number(row.iaq),
+            };
+          })
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setHistoryError(error instanceof Error ? error.message : 'History request failed');
+          setHistoryData([]);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+
+    loadHistory();
+    const interval = window.setInterval(loadHistory, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [historyPeriod]);
 
   if (!userData || !bmi) {
     navigate('/');
@@ -501,6 +575,22 @@ export function MainDashboardPage() {
     },
   ];
 
+  const fatigueHistory = historyData.filter((point) => point.fatigueRun > 0);
+  const peakFatiguePoint = historyData.reduce<HistoryPoint | null>(
+    (peak, point) => (!peak || point.fatigueRun > peak.fatigueRun ? point : peak),
+    null,
+  );
+  const activityModeCounts = historyData.reduce<Record<string, number>>((counts, point) => {
+    const mode = point.activityMode || 'unknown';
+    counts[mode] = (counts[mode] || 0) + 1;
+    return counts;
+  }, {});
+  const dominantActivityMode = Object.entries(activityModeCounts).sort((a, b) => b[1] - a[1])[0];
+  const latestFatigueRows = fatigueHistory.slice(-8).reverse();
+  const fatiguePercent = historyData.length
+    ? (fatigueHistory.length / historyData.length) * 100
+    : 0;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] p-4 md:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
@@ -632,7 +722,7 @@ export function MainDashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-5 md:p-6 shadow-sm"
+          className="bg-white rounded-2xl p-5 md:p-6 shadow-sm mb-6"
         >
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg md:text-xl font-semibold text-gray-900">{t.history.weightTrend}</h3>
@@ -671,6 +761,116 @@ export function MainDashboardPage() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl p-5 md:p-6 shadow-sm"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+            <div>
+              <h3 className="text-lg md:text-xl font-semibold text-gray-900">Activity History Summary</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Stored model states from Postgres, sampled by the MQTT bridge
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {HISTORY_PERIODS.map((period) => (
+                <button
+                  key={period.value}
+                  type="button"
+                  onClick={() => setHistoryPeriod(period.value)}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    historyPeriod === period.value
+                      ? 'bg-[#00809D] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {period.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {historyError ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+              {historyError}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="rounded-xl bg-gray-50 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm text-gray-500">Stored Records</p>
+                    <Activity className="w-5 h-5 text-[#00809D]" />
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900">{historyData.length}</div>
+                  <p className="text-xs text-gray-500 mt-1">{historyLoading ? 'Updating...' : `Period ${historyPeriod}`}</p>
+                </div>
+
+                <div className="rounded-xl bg-red-50 border border-red-100 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm text-red-700">fatigue_run Count</p>
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div className="text-3xl font-bold text-red-700">{fatigueHistory.length}</div>
+                  <p className="text-xs text-red-600 mt-1">Only records where fatigue_run &gt; 0</p>
+                </div>
+
+                <div className="rounded-xl bg-gray-50 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm text-gray-500">Peak fatigue_run</p>
+                    <Gauge className="w-5 h-5 text-[#FF7601]" />
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900">
+                    {peakFatiguePoint ? `${(peakFatiguePoint.fatigueRun * 100).toFixed(1)}%` : '0.0%'}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">{peakFatiguePoint?.time || 'No history yet'}</p>
+                </div>
+
+                <div className="rounded-xl bg-gray-50 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm text-gray-500">Main Activity Mode</p>
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {dominantActivityMode?.[0] || 'unknown'}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {dominantActivityMode ? `${dominantActivityMode[1]} records` : 'No history yet'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <h4 className="font-semibold text-gray-900 mb-3">Recent fatigue_run records</h4>
+                <div className="space-y-2">
+                  {latestFatigueRows.length ? latestFatigueRows.map((point, index) => (
+                    <div key={`${point.time}-${index}`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                      <div>
+                        <div className="font-semibold text-gray-800">{point.activityMode || 'unknown'}</div>
+                        <div className="text-xs text-gray-500">{point.time}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-red-600">{(point.fatigueRun * 100).toFixed(1)}%</div>
+                        <div className="text-xs text-gray-500">fatigue_run</div>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">
+                      No fatigue_run records above 0 in this period.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+                <span>{fatiguePercent.toFixed(1)}% of stored records include fatigue_run above 0</span>
+                <span>Source: public.prediction_events</span>
+              </div>
+            </>
+          )}
         </motion.div>
       </div>
     </div>
