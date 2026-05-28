@@ -43,6 +43,9 @@ function SensorTemplateCard({ template }: { template: SensorTemplate }) {
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
     airQuality: t.sensors.airQuality,
+    airPressure: t.sensors.airPressure,
+    buzzer: t.sensors.buzzer,
+    aiAgent: t.sensors.aiAgent,
   };
 
   return (
@@ -125,6 +128,9 @@ function SensorNodeCard({
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
     airQuality: t.sensors.airQuality,
+    airPressure: t.sensors.airPressure,
+    buzzer: t.sensors.buzzer,
+    aiAgent: t.sensors.aiAgent,
   };
 
   const ports: Port[] = ['top', 'right', 'bottom', 'left'];
@@ -265,6 +271,9 @@ function MobileSensorPicker({ onSelect, onClose }: {
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
     airQuality: t.sensors.airQuality,
+    airPressure: t.sensors.airPressure,
+    buzzer: t.sensors.buzzer,
+    aiAgent: t.sensors.aiAgent,
   };
 
   return (
@@ -320,6 +329,9 @@ function MobilePuzzleGrid({ onToggleConnection, onDelete, onAddSensorClick }: {
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
     airQuality: t.sensors.airQuality,
+    airPressure: t.sensors.airPressure,
+    buzzer: t.sensors.buzzer,
+    aiAgent: t.sensors.aiAgent,
   };
 
   return (

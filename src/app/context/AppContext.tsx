@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Language, translations, Translations } from '../i18n/translations';
-import { Thermometer, Gauge, Droplets, Wind, LucideIcon } from 'lucide-react';
+import { Thermometer, Gauge, Droplets, Wind, Bot, CircleGauge, Volume2, Dumbbell, LucideIcon } from 'lucide-react';
 
 
 interface UserData {
@@ -33,16 +33,23 @@ export interface SensorEdge {
 
 export const SENSOR_TEMPLATES = [
   { type: 'temperature', label: 'Temperature', icon: 'Thermometer', color: 'rgb(140, 150, 96)' },
-  { type: 'gyroscope', label: 'Movement', icon: 'Gauge', color: 'rgb(160, 184, 104)' },
+  { type: 'gyroscope', label: 'Movement', icon: 'Dumbbell', color: 'rgb(160, 184, 104)' },
   { type: 'humidity', label: 'Humidity', icon: 'Droplets', color: 'rgb(145, 196, 195)' },
   { type: 'airQuality', label: 'Air Quality', icon: 'Wind', color: 'rgb(119, 171, 164)' },
+  { type: 'airPressure', label: 'Air Pressure', icon: 'CircleGauge', color: 'rgb(100, 149, 167)' },
+  { type: 'buzzer', label: 'Buzzer', icon: 'Volume2', color: 'rgb(191, 144, 85)' },
+  { type: 'aiAgent', label: 'AI Agent', icon: 'Bot', color: 'rgb(130, 100, 170)' },
 ];
 
 export const SENSOR_ICON_MAP: Record<string, LucideIcon> = {
   Thermometer,
   Gauge,
+  Dumbbell,
   Droplets,
   Wind,
+  CircleGauge,
+  Volume2,
+  Bot,
 };
 
 export const NODE_CARD_WIDTH = 180;

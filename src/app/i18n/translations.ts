@@ -72,6 +72,9 @@ export interface Translations {
     heartRate: string;
     humidity: string;
     airQuality: string;
+    airPressure: string;
+    buzzer: string;
+    aiAgent: string;
     dragInstruction: string;
     connected: string;
     disconnected: string;
@@ -178,6 +181,9 @@ export const translations: Record<Language, Translations> = {
       heartRate: 'Heart Rate',
       humidity: 'Humidity',
       airQuality: 'Air Quality',
+      airPressure: 'Air Pressure',
+      buzzer: 'Buzzer',
+      aiAgent: 'AI Agent',
       dragInstruction: 'Drag sensors from the sidebar to the workspace',
       connected: 'Connected',
       disconnected: 'Disconnected',
@@ -292,6 +298,9 @@ export const translations: Record<Language, Translations> = {
       heartRate: 'อัตราการเต้นหัวใจ',
       humidity: 'ความชื้น',
       airQuality: 'คุณภาพอากาศ',
+      airPressure: 'ความดันอากาศ',
+      buzzer: 'บัซเซอร์',
+      aiAgent: 'เอไอเอเจนต์',
       dragInstruction: 'ลากเซ็นเซอร์จากแถบด้านข้างไปยังพื้นที่ทำงาน',
       connected: 'เชื่อมต่อแล้ว',
       disconnected: 'ยังไม่ได้เชื่อมต่อ',
