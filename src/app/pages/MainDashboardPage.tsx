@@ -1,34 +1,334 @@
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingDown, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { TrendingDown, ThermometerSun, Mountain, Wind, Gauge, TriangleAlert, CheckCircle2, AlertCircle } from 'lucide-react';
+
+const MQTT_BRIDGE_URL =
+  import.meta.env.VITE_MQTT_BRIDGE_URL || 'ws://localhost:8080/stream';
+const HISTORY_LIMIT = 180;
+const BASELINE_SAMPLES = 120;
+
+type MotionSample = {
+  ax?: number;
+  ay?: number;
+  az?: number;
+  gx?: number;
+  gy?: number;
+  gz?: number;
+};
+
+type ThermoSample = {
+  temp_c?: number;
+  humidity?: number;
+};
+
+type Bme680Sample = {
+  pressure_hpa?: number;
+  gas_kohm?: number;
+  eco2?: number;
+  aqi?: number;
+};
+
+type NanoBleSample = {
+  pressure_kpa?: number;
+};
+
+type PredictionSample = {
+  label?: string;
+  confidence?: number;
+  probabilities?: Record<string, number>;
+};
+
+type SnapshotPayload = {
+  wall_time?: string;
+  timestamp_ms?: number;
+  motion?: MotionSample;
+  thermo?: ThermoSample;
+  bme680?: Bme680Sample;
+  nano_ble?: NanoBleSample;
+  prediction?: PredictionSample;
+};
+
+type BridgePacket =
+  | {
+      type: 'status';
+      connected?: boolean;
+      has_movement?: boolean;
+      has_thermo?: boolean;
+      has_bme680?: boolean;
+      message?: string;
+    }
+  | {
+      type: 'snapshot';
+      payload?: SnapshotPayload;
+    };
+
+type StatusLevel = 'green' | 'yellow' | 'red';
+
+type MetricStatus = {
+  level: StatusLevel;
+  label: string;
+  value: string;
+  detail: string;
+};
+
+function average(values: number[]) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function computeHeatIndexC(tempC: number, humidity: number) {
+  const vaporPressure =
+    (humidity / 100) * 6.105 * Math.exp((17.27 * tempC) / (237.7 + tempC));
+  return tempC + 0.33 * vaporPressure - 4.0;
+}
+
+function getHeatIndexStatus(heatIndexC: number): MetricStatus {
+  if (heatIndexC >= 39.4) {
+    return { level: 'red', label: 'Danger', value: `${heatIndexC.toFixed(1)}°C`, detail: 'Very high heat strain' };
+  }
+  if (heatIndexC >= 32.8) {
+    return { level: 'red', label: 'High', value: `${heatIndexC.toFixed(1)}°C`, detail: 'Reduce intensity and hydrate' };
+  }
+  if (heatIndexC >= 27) {
+    return { level: 'yellow', label: 'Caution', value: `${heatIndexC.toFixed(1)}°C`, detail: 'Heat load is rising' };
+  }
+  return { level: 'green', label: 'Normal', value: `${heatIndexC.toFixed(1)}°C`, detail: 'Comfortable heat index' };
+}
+
+function pressureToAltitudeM(pressureHpa: number) {
+  return 44330 * (1 - Math.pow(pressureHpa / 1013.25, 0.1903));
+}
+
+function getPressureStatus(pressureHpa: number, altitudeM: number): MetricStatus {
+  if (pressureHpa < 752) {
+    return { level: 'red', label: 'High altitude', value: `${pressureHpa.toFixed(0)} hPa`, detail: `~${Math.round(altitudeM)} m altitude context` };
+  }
+  if (pressureHpa < 850) {
+    return { level: 'yellow', label: 'Watch', value: `${pressureHpa.toFixed(0)} hPa`, detail: `~${Math.round(altitudeM)} m, oxygen load rising` };
+  }
+  return { level: 'green', label: 'Normal', value: `${pressureHpa.toFixed(0)} hPa`, detail: `~${Math.round(altitudeM)} m equivalent` };
+}
+
+function getAqiStatus(aqi: number, eco2: number): MetricStatus {
+  if (aqi > 150 || eco2 > 1200) {
+    return { level: 'red', label: 'Poor', value: `${aqi.toFixed(0)} IAQ`, detail: `eCO₂ ${eco2.toFixed(0)} ppm` };
+  }
+  if (aqi > 100 || eco2 > 900) {
+    return { level: 'yellow', label: 'Moderate', value: `${aqi.toFixed(0)} IAQ`, detail: `eCO₂ ${eco2.toFixed(0)} ppm` };
+  }
+  return { level: 'green', label: 'Good', value: `${aqi.toFixed(0)} IAQ`, detail: `eCO₂ ${eco2.toFixed(0)} ppm` };
+}
+
+function getEnvironmentStatus(pressureHpa: number, tempC: number, humidity: number, heatIndexC: number): MetricStatus {
+  if ((pressureHpa < 752 && tempC >= 33) || heatIndexC >= 39.4) {
+    return { level: 'red', label: 'Red action', value: 'High', detail: 'Pause, cool down, hydrate' };
+  }
+  if (pressureHpa < 795 || tempC >= 33 || heatIndexC >= 32.8) {
+    return { level: 'red', label: 'High load', value: 'Red', detail: `${tempC.toFixed(1)}°C • ${humidity.toFixed(0)}% RH` };
+  }
+  if ((pressureHpa >= 795 && pressureHpa <= 850) || (tempC >= 30 && tempC < 33) || heatIndexC >= 27) {
+    return { level: 'yellow', label: 'Elevated', value: 'Yellow', detail: `${tempC.toFixed(1)}°C • ${humidity.toFixed(0)}% RH` };
+  }
+  return { level: 'green', label: 'Normal', value: 'Green', detail: `${tempC.toFixed(1)}°C • ${humidity.toFixed(0)}% RH` };
+}
+
+function getFatigueStatus(
+  impactRatio: number,
+  cadenceDrop: number,
+  tiltRatio: number,
+  heatIndexC: number,
+  baselineReady: boolean,
+): MetricStatus {
+  if (!baselineReady) {
+    return { level: 'yellow', label: 'Learning', value: 'Baseline', detail: 'Collecting first movement samples' };
+  }
+
+  if (
+    heatIndexC >= 33 ||
+    impactRatio > 1.3 ||
+    (cadenceDrop > 0.15 && impactRatio > 1.15) ||
+    tiltRatio > 1.5
+  ) {
+    return {
+      level: 'red',
+      label: 'Danger',
+      value: `${impactRatio.toFixed(2)}x`,
+      detail: `Cadence ${(cadenceDrop * 100).toFixed(0)}% • Tilt ${tiltRatio.toFixed(2)}x`,
+    };
+  }
+  if (
+    (heatIndexC >= 27 && heatIndexC < 33) ||
+    (impactRatio > 1.15 && impactRatio <= 1.3) ||
+    (cadenceDrop >= 0.05 && cadenceDrop <= 0.15) ||
+    (tiltRatio > 1.2 && tiltRatio <= 1.5)
+  ) {
+    return {
+      level: 'yellow',
+      label: 'Caution',
+      value: `${impactRatio.toFixed(2)}x`,
+      detail: `Cadence ${(cadenceDrop * 100).toFixed(0)}% • Tilt ${tiltRatio.toFixed(2)}x`,
+    };
+  }
+  return {
+    level: 'green',
+    label: 'Stable',
+    value: `${impactRatio.toFixed(2)}x`,
+    detail: `Cadence ${(cadenceDrop * 100).toFixed(0)}% • Tilt ${tiltRatio.toFixed(2)}x`,
+  };
+}
+
+function getLevelStyles(level: StatusLevel) {
+  if (level === 'red') {
+    return {
+      badge: 'bg-red-100 text-red-700',
+      border: 'border-red-200',
+      icon: '#dc2626',
+    };
+  }
+  if (level === 'yellow') {
+    return {
+      badge: 'bg-amber-100 text-amber-700',
+      border: 'border-amber-200',
+      icon: '#d97706',
+    };
+  }
+  return {
+    badge: 'bg-emerald-100 text-emerald-700',
+    border: 'border-emerald-200',
+    icon: '#059669',
+  };
+}
+
+function StatusCard({
+  title,
+  icon: Icon,
+  status,
+}: {
+  title: string;
+  icon: typeof ThermometerSun;
+  status: MetricStatus;
+}) {
+  const styles = getLevelStyles(status.level);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`bg-white rounded-2xl p-5 shadow-sm border ${styles.border}`}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <p className="text-sm text-gray-500 mb-1">{title}</p>
+          <div className="text-2xl font-bold text-gray-900">{status.value}</div>
+        </div>
+        <div className="p-3 rounded-xl bg-gray-50">
+          <Icon className="w-5 h-5" style={{ color: styles.icon }} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${styles.badge}`}>
+          {status.label}
+        </span>
+        <span className="text-xs text-gray-500 text-right">{status.detail}</span>
+      </div>
+    </motion.div>
+  );
+}
 
 export function MainDashboardPage() {
   const { t, userData, bmi } = useApp();
   const navigate = useNavigate();
+
+  const [bridgeConnected, setBridgeConnected] = useState(false);
+  const [motionHistory, setMotionHistory] = useState<Array<{ timestamp: number; ax: number; ay: number; az: number; gx: number; gy: number; gz: number }>>([]);
+  const [currentTemp, setCurrentTemp] = useState(0);
+  const [currentHumidity, setCurrentHumidity] = useState(0);
+  const [currentPressure, setCurrentPressure] = useState(1013.25);
+  const [currentAqi, setCurrentAqi] = useState(0);
+  const [currentEco2, setCurrentEco2] = useState(0);
+  const [prediction, setPrediction] = useState<PredictionSample | null>(null);
+
+  useEffect(() => {
+    const socket = new WebSocket(MQTT_BRIDGE_URL);
+
+    socket.addEventListener('message', (event) => {
+      const packet = JSON.parse(event.data) as BridgePacket;
+
+      if (packet.type === 'status') {
+        setBridgeConnected(Boolean(packet.connected));
+        return;
+      }
+
+      if (packet.type !== 'snapshot' || !packet.payload) return;
+      const snapshot = packet.payload;
+
+      if (snapshot.motion) {
+        setMotionHistory((current) =>
+          [
+            ...current,
+            {
+              timestamp: Number(snapshot.timestamp_ms ?? Date.now()),
+              ax: Number(snapshot.motion?.ax ?? 0),
+              ay: Number(snapshot.motion?.ay ?? 0),
+              az: Number(snapshot.motion?.az ?? 0),
+              gx: Number(snapshot.motion?.gx ?? 0),
+              gy: Number(snapshot.motion?.gy ?? 0),
+              gz: Number(snapshot.motion?.gz ?? 0),
+            },
+          ].slice(-HISTORY_LIMIT)
+        );
+      }
+
+      if (snapshot.thermo) {
+        setCurrentTemp(Number(snapshot.thermo.temp_c ?? 0));
+        setCurrentHumidity(Number(snapshot.thermo.humidity ?? 0));
+      }
+
+      if (snapshot.bme680) {
+        setCurrentAqi(Number(snapshot.bme680.aqi ?? 0));
+        setCurrentEco2(Number(snapshot.bme680.eco2 ?? 0));
+      }
+
+      if (snapshot.nano_ble?.pressure_kpa) {
+        setCurrentPressure(Number(snapshot.nano_ble.pressure_kpa) * 10);
+      } else if (snapshot.bme680?.pressure_hpa) {
+        setCurrentPressure(Number(snapshot.bme680.pressure_hpa));
+      }
+
+      if (snapshot.prediction) {
+        setPrediction(snapshot.prediction);
+      }
+    });
+
+    socket.addEventListener('close', () => setBridgeConnected(false));
+    socket.addEventListener('error', () => setBridgeConnected(false));
+
+    return () => socket.close();
+  }, []);
 
   if (!userData || !bmi) {
     navigate('/');
     return null;
   }
 
-  const getBMICategory = (bmi: number) => {
-    if (bmi < 18.5) return { label: t.bmi.underweight, color: '#3b82f6' };
-    if (bmi < 25) return { label: t.bmi.normal, color: '#00809D' };
-    if (bmi < 30) return { label: t.bmi.overweight, color: '#FF7601' };
+  const getBMICategory = (bmiValue: number) => {
+    if (bmiValue < 18.5) return { label: t.bmi.underweight, color: '#3b82f6' };
+    if (bmiValue < 25) return { label: t.bmi.normal, color: '#00809D' };
+    if (bmiValue < 30) return { label: t.bmi.overweight, color: '#FF7601' };
     return { label: t.bmi.obese, color: '#ef4444' };
   };
 
   const category = getBMICategory(bmi);
 
-  const getBMIPercentage = (bmi: number) => {
+  const getBMIPercentage = (bmiValue: number) => {
     const min = 15;
     const max = 40;
-    return Math.min(100, Math.max(0, ((bmi - min) / (max - min)) * 100));
+    return Math.min(100, Math.max(0, ((bmiValue - min) / (max - min)) * 100));
   };
 
-  // Mock weight history data
   const weightHistory = [
     { day: 'Mon', weight: userData.weight + 2 },
     { day: 'Tue', weight: userData.weight + 1.5 },
@@ -39,19 +339,172 @@ export function MainDashboardPage() {
     { day: 'Sun', weight: userData.weight },
   ];
 
-  // Mock posture data
-  const postureAreas = [
-    { area: 'Neck', status: 'normal', icon: CheckCircle2, color: '#00809D' },
-    { area: 'Upper Back', status: 'warning', icon: AlertCircle, color: '#FF7601' },
-    { area: 'Lower Back', status: 'normal', icon: CheckCircle2, color: '#00809D' },
-    { area: 'Shoulders', status: 'normal', icon: CheckCircle2, color: '#00809D' },
+  const movementMetrics = useMemo(() => {
+    const enriched = motionHistory.map((sample) => {
+      const accMag = Math.sqrt(sample.ax ** 2 + sample.ay ** 2 + sample.az ** 2);
+      const dynamicAcc = Math.abs(accMag - 1);
+      return { ...sample, accMag, dynamicAcc };
+    });
+
+    const baselineWindow = enriched.slice(0, BASELINE_SAMPLES);
+    const latest = enriched[enriched.length - 1];
+    const baselineImpact = average(baselineWindow.map((sample) => Math.abs(sample.az)));
+    const impactRatio = latest ? Math.abs(latest.az) / Math.max(baselineImpact, 0.05) : 1;
+
+    const computeCadence = (samples: typeof enriched) => {
+      if (samples.length < 4) return 0;
+      let peaks = 0;
+      for (let index = 1; index < samples.length - 1; index += 1) {
+        const current = samples[index].accMag;
+        if (
+          current > 1.15 &&
+          current > samples[index - 1].accMag &&
+          current >= samples[index + 1].accMag
+        ) {
+          peaks += 1;
+        }
+      }
+      const durationMs = Math.max(
+        (samples[samples.length - 1].timestamp || 0) - (samples[0].timestamp || 0),
+        1000,
+      );
+      return peaks * (60000 / durationMs);
+    };
+
+    const baselineCadence = computeCadence(baselineWindow);
+    const currentWindow = enriched.slice(-Math.min(enriched.length, 20));
+    const currentCadence = computeCadence(currentWindow);
+    const cadenceDrop =
+      baselineCadence > 0
+        ? Math.max(0, (baselineCadence - currentCadence) / baselineCadence)
+        : 0;
+
+    const computeStd = (values: number[]) => {
+      if (!values.length) return 0;
+      const mean = average(values);
+      return Math.sqrt(average(values.map((value) => (value - mean) ** 2)));
+    };
+
+    const baselineTiltStd = computeStd(baselineWindow.map((sample) => sample.gx));
+    const currentTiltStd = computeStd(currentWindow.map((sample) => sample.gx));
+    const tiltRatio = currentTiltStd / Math.max(baselineTiltStd, 0.01);
+
+    return {
+      baselineReady: baselineWindow.length >= 20,
+      latest,
+      impactRatio,
+      cadenceDrop,
+      tiltRatio,
+    };
+  }, [motionHistory]);
+
+  const heatIndexC = useMemo(
+    () => computeHeatIndexC(currentTemp, currentHumidity),
+    [currentTemp, currentHumidity],
+  );
+
+  const altitudeM = useMemo(
+    () => pressureToAltitudeM(currentPressure),
+    [currentPressure],
+  );
+
+  const heatStatus = getHeatIndexStatus(heatIndexC);
+  const environmentStatus = getEnvironmentStatus(currentPressure, currentTemp, currentHumidity, heatIndexC);
+  const aqiStatus = getAqiStatus(currentAqi, currentEco2);
+  const pressureStatus = getPressureStatus(currentPressure, altitudeM);
+  const fatigueStatus = getFatigueStatus(
+    movementMetrics.impactRatio,
+    movementMetrics.cadenceDrop,
+    movementMetrics.tiltRatio,
+    heatIndexC,
+    movementMetrics.baselineReady,
+  );
+
+  const predictionStatus = useMemo(() => {
+    if (prediction?.label) {
+      const label = prediction.label;
+      const confidence = `${(Number(prediction.confidence || 0) * 100).toFixed(1)}%`;
+      if (label === 'fatigue_run') {
+        return {
+          level: 'red' as const,
+          label: 'Model warning',
+          value: label,
+          detail: `Confidence ${confidence}`,
+        };
+      }
+      if (label === 'normal_run' || label === 'fast_run') {
+        return {
+          level: 'green' as const,
+          label: 'Model stable',
+          value: label,
+          detail: `Confidence ${confidence}`,
+        };
+      }
+      return {
+        level: 'yellow' as const,
+        label: 'Model detected',
+        value: label,
+        detail: `Confidence ${confidence}`,
+      };
+    }
+
+    return {
+      level: fatigueStatus.level,
+      label: 'Derived',
+      value: fatigueStatus.label,
+      detail: 'Using motion + thermo fallback',
+    };
+  }, [prediction, fatigueStatus]);
+
+  const dangerStates = [
+    { title: 'Heat Index', status: heatStatus },
+    { title: 'Environment Load', status: environmentStatus },
+    { title: 'IAQ', status: aqiStatus },
+    { title: 'Pressure / Altitude', status: pressureStatus },
+    { title: 'Fatigue Risk', status: predictionStatus },
+  ].filter((item) => item.status.level === 'red');
+
+  const coachingNotes = [
+    ...(dangerStates.length
+      ? [{
+          tone: 'danger' as const,
+          message: `Warning: ${dangerStates.map((item) => item.title).join(', ')} ${dangerStates.length > 1 ? 'are' : 'is'} in the danger zone. Reduce intensity, hydrate, and monitor form now.`,
+        }]
+      : []),
+    {
+      tone: bridgeConnected ? ('ok' as const) : ('neutral' as const),
+      message: bridgeConnected
+        ? `Live stream connected. Environment load is ${environmentStatus.label.toLowerCase()}.`
+        : 'Waiting for live MQTT data from the bridge.',
+    },
+    {
+      tone: prediction?.label ? ('ok' as const) : ('neutral' as const),
+      message: prediction?.label
+        ? `Model prediction is ${prediction.label} at ${(Number(prediction.confidence || 0) * 100).toFixed(1)}% confidence.`
+        : 'No model prediction yet, so the dashboard is using fallback calculations from movement and environment.',
+    },
+    {
+      tone: heatStatus.level === 'red' ? ('danger' as const) : heatStatus.level === 'yellow' ? ('warn' as const) : ('neutral' as const),
+      message: `Heat index is ${heatStatus.value}. ${heatStatus.detail}.`,
+    },
+    {
+      tone: pressureStatus.level === 'red' ? ('danger' as const) : pressureStatus.level === 'yellow' ? ('warn' as const) : ('neutral' as const),
+      message: `Pressure is ${currentPressure.toFixed(0)} hPa (~${Math.round(altitudeM)} m equivalent), so altitude load is ${pressureStatus.label.toLowerCase()}.`,
+    },
+    {
+      tone: !prediction?.label && fatigueStatus.level === 'red' ? ('danger' as const) : !prediction?.label && fatigueStatus.level === 'yellow' ? ('warn' as const) : ('neutral' as const),
+      message: !prediction?.label && movementMetrics.baselineReady
+        ? `Impact is ${fatigueStatus.value} of baseline, cadence drop is ${(movementMetrics.cadenceDrop * 100).toFixed(0)}%, and tilt ratio is ${movementMetrics.tiltRatio.toFixed(2)}x.`
+        : !prediction?.label
+          ? 'Movement baseline is still learning for the first session samples.'
+          : `Fallback fatigue signal is ${fatigueStatus.label.toLowerCase()} for cross-checking the model result.`,
+    },
   ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] p-4 md:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Header - User Welcome */}
-        <motion.header 
+        <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6 md:mb-8 bg-white rounded-2xl p-4 md:p-6 shadow-sm"
@@ -66,15 +519,26 @@ export function MainDashboardPage() {
                 {t.onboarding.kg} • {t.onboarding.age}: {userData.age} {t.onboarding.years}
               </p>
             </div>
-            <div className="hidden md:flex items-center justify-center w-12 h-12 bg-gradient-to-r from-[#00809D] to-[#FF7601] rounded-full text-white font-bold">
-              {userData.name?.charAt(0) || 'U'}
+            <div className="flex items-center gap-3">
+              <span className={`text-xs font-semibold px-3 py-1 rounded-full ${bridgeConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                {bridgeConnected ? 'LIVE' : 'Waiting'}
+              </span>
+              <div className="hidden md:flex items-center justify-center w-12 h-12 bg-gradient-to-r from-[#00809D] to-[#FF7601] rounded-full text-white font-bold">
+                {userData.name?.charAt(0) || 'U'}
+              </div>
             </div>
           </div>
         </motion.header>
 
-        {/* Main Grid - BMI and Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6 mb-6">
+          <StatusCard title="Heat Index" icon={ThermometerSun} status={heatStatus} />
+          <StatusCard title="Environment Load" icon={TriangleAlert} status={environmentStatus} />
+          <StatusCard title="IAQ" icon={Wind} status={aqiStatus} />
+          <StatusCard title="Pressure / Altitude" icon={Mountain} status={pressureStatus} />
+          <StatusCard title="Fatigue Risk" icon={Gauge} status={predictionStatus} />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
-          {/* BMI Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -91,7 +555,6 @@ export function MainDashboardPage() {
               </div>
             </div>
 
-            {/* BMI Scale */}
             <div className="relative h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden mb-3">
               <div
                 className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#3b82f6] via-[#00809D] via-[#FF7601] to-[#ef4444] rounded-full"
@@ -114,39 +577,50 @@ export function MainDashboardPage() {
             </div>
           </motion.div>
 
-          {/* Posture Analysis */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="bg-white rounded-2xl p-5 md:p-6 shadow-sm"
           >
-            <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">{t.posture.title}</h3>
+            <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Live Coaching Summary</h3>
 
             <div className="space-y-3">
-              {postureAreas.map((area, index) => {
-                const Icon = area.icon;
+              {coachingNotes.map((note, index) => {
+                const Icon =
+                  note.tone === 'danger'
+                    ? AlertCircle
+                    : index === 1
+                      ? ThermometerSun
+                      : index === 2
+                        ? Mountain
+                        : CheckCircle2;
+                const color =
+                  note.tone === 'danger'
+                    ? '#dc2626'
+                    : note.tone === 'warn'
+                      ? '#d97706'
+                      : index === 1
+                        ? '#FF7601'
+                        : index === 2
+                          ? '#6495A7'
+                          : '#00809D';
+                const backgroundClass =
+                  note.tone === 'danger'
+                    ? 'bg-red-50 border border-red-200'
+                    : note.tone === 'warn'
+                      ? 'bg-amber-50 border border-amber-200'
+                      : 'bg-gray-50';
                 return (
                   <motion.div
-                    key={area.area}
+                    key={`${index}-${note.message}`}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 + index * 0.1 }}
-                    className="flex items-center justify-between p-3 md:p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                    className={`flex items-start gap-3 p-3 md:p-4 rounded-xl ${backgroundClass}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Icon className="w-5 h-5" style={{ color: area.color }} />
-                      <span className="font-medium text-gray-700 text-sm md:text-base">{area.area}</span>
-                    </div>
-                    <span
-                      className="text-xs md:text-sm font-semibold px-3 py-1 rounded-full"
-                      style={{
-                        backgroundColor: `${area.color}20`,
-                        color: area.color,
-                      }}
-                    >
-                      {area.status === 'normal' ? t.posture.normal : t.posture.warning}
-                    </span>
+                    <Icon className="w-5 h-5 mt-0.5" style={{ color }} />
+                    <span className="font-medium text-gray-700 text-sm md:text-base">{note.message}</span>
                   </motion.div>
                 );
               })}
@@ -154,7 +628,6 @@ export function MainDashboardPage() {
           </motion.div>
         </div>
 
-        {/* Weight History Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

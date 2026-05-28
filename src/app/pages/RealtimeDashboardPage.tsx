@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Thermometer, Droplets, Radio, Activity } from 'lucide-react';
+import { Activity, CircleGauge, Droplets, Radio, Thermometer, Wind } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { TemperatureChart } from '../components/TemperatureChart';
 import { GyroscopeVisualization } from '../components/GyroscopeVisualization';
@@ -10,21 +10,43 @@ import { useApp } from '../context/AppContext';
 const MQTT_BRIDGE_URL =
   import.meta.env.VITE_MQTT_BRIDGE_URL || 'ws://localhost:8080/stream';
 const HISTORY_LIMIT = 200;
+const UI_UPDATE_MS = 250;
 
-type MovementPayload = {
-  x?: number;
-  y?: number;
-  z?: number;
-  roll?: number;
-  pitch?: number;
-  yaw?: number;
-  ts?: number;
+type MotionSample = {
+  ax?: number;
+  ay?: number;
+  az?: number;
+  gx?: number;
+  gy?: number;
+  gz?: number;
 };
 
-type ThermoPayload = {
-  temperature?: number;
+type ThermoSample = {
+  temp_c?: number;
   humidity?: number;
-  ts?: number;
+};
+
+type Bme680Sample = {
+  pressure_hpa?: number;
+  gas_kohm?: number;
+  eco2?: number;
+  aqi?: number;
+};
+
+type PredictionSample = {
+  label?: string;
+  confidence?: number;
+  probabilities?: Record<string, number>;
+};
+
+type SnapshotPayload = {
+  wall_time?: string;
+  timestamp_ms?: number;
+  motion?: MotionSample;
+  thermo?: ThermoSample;
+  bme680?: Bme680Sample;
+  prediction?: PredictionSample;
+  raw?: Record<string, unknown>;
 };
 
 type BridgePacket =
@@ -33,12 +55,12 @@ type BridgePacket =
       connected?: boolean;
       has_movement?: boolean;
       has_thermo?: boolean;
+      has_bme680?: boolean;
       message?: string;
     }
   | {
-      type: 'sensor';
-      topic?: string;
-      payload?: MovementPayload & ThermoPayload;
+      type: 'snapshot';
+      payload?: SnapshotPayload;
     };
 
 export function RealtimeDashboardPage() {
@@ -47,15 +69,27 @@ export function RealtimeDashboardPage() {
 
   const wantsTemp = connectedSensorTypes.includes('temperature');
   const wantsHumidity = connectedSensorTypes.includes('humidity');
-  const wantsGyro = connectedSensorTypes.includes('gyroscope');
+  const wantsMovement = connectedSensorTypes.includes('gyroscope');
+  const wantsAirQuality = connectedSensorTypes.includes('airQuality');
+  const wantsAirPressure = connectedSensorTypes.includes('airPressure');
   const hasAnySelectedSensor = connectedSensors.length > 0;
 
-  const [connectionText, setConnectionText] = useState('Connecting to MQTT bridge...');
+  const [connectionText, setConnectionText] = useState('Connecting...');
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [movementReady, setMovementReady] = useState(false);
   const [thermoReady, setThermoReady] = useState(false);
+  const [bme680Ready, setBme680Ready] = useState(false);
+
   const [currentTemp, setCurrentTemp] = useState(0);
   const [currentHumidity, setCurrentHumidity] = useState(0);
+  const [currentPressure, setCurrentPressure] = useState(0);
+  const [currentAqi, setCurrentAqi] = useState(0);
+  const [currentEco2, setCurrentEco2] = useState(0);
+  const [prediction, setPrediction] = useState<PredictionSample | null>(null);
+  const [rawSnapshot, setRawSnapshot] = useState<Record<string, unknown> | null>(null);
+  const lastRawSnapshotAt = useRef(0);
+  const latestSnapshotRef = useRef<SnapshotPayload | null>(null);
+
   const [gyroData, setGyroData] = useState({ pitch: 0, roll: 0, yaw: 0 });
   const [accelData, setAccelData] = useState({ x: 0, y: 0, z: 0 });
   const [tempData, setTempData] = useState<Array<{ id: string; time: string; temp: number }>>([]);
@@ -66,18 +100,96 @@ export function RealtimeDashboardPage() {
   useEffect(() => {
     const socket = new WebSocket(MQTT_BRIDGE_URL);
 
+    const flushInterval = window.setInterval(() => {
+      const snapshot = latestSnapshotRef.current;
+      if (!snapshot) return;
+      latestSnapshotRef.current = null;
+
+      const now = Date.now();
+      if (now - lastRawSnapshotAt.current >= 500) {
+        lastRawSnapshotAt.current = now;
+        setRawSnapshot(snapshot.raw || snapshot as unknown as Record<string, unknown>);
+      }
+
+      const timeLabel = snapshot.wall_time
+        ? snapshot.wall_time.slice(11, 19)
+        : new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+
+      if (snapshot.motion) {
+        setAccelData({
+          x: Number(snapshot.motion.ax || 0),
+          y: Number(snapshot.motion.ay || 0),
+          z: Number(snapshot.motion.az || 0),
+        });
+        setGyroData({
+          pitch: Number(snapshot.motion.gx || 0),
+          roll: Number(snapshot.motion.gy || 0),
+          yaw: Number(snapshot.motion.gz || 0),
+        });
+        setActivityData((current) =>
+          [
+            ...current,
+            {
+              id: `activity-${snapshot.timestamp_ms || Date.now()}`,
+              time: timeLabel,
+              x: Number(snapshot.motion?.ax || 0),
+              y: Number(snapshot.motion?.ay || 0),
+              z: Number(snapshot.motion?.az || 0),
+            },
+          ].slice(-HISTORY_LIMIT)
+        );
+      }
+
+      if (snapshot.thermo) {
+        const nextTemp = Number(snapshot.thermo.temp_c || 0);
+        const nextHumidity = Number(snapshot.thermo.humidity || 0);
+        setCurrentTemp(nextTemp);
+        setCurrentHumidity(nextHumidity);
+        setTempData((current) =>
+          [
+            ...current,
+            {
+              id: `temp-${snapshot.timestamp_ms || Date.now()}`,
+              time: timeLabel,
+              temp: nextTemp,
+            },
+          ].slice(-HISTORY_LIMIT)
+        );
+      }
+
+      if (snapshot.bme680) {
+        setCurrentPressure(Number(snapshot.bme680.pressure_hpa || 0));
+        setCurrentAqi(Number(snapshot.bme680.aqi || 0));
+        setCurrentEco2(Number(snapshot.bme680.eco2 || 0));
+      }
+
+      if (snapshot.prediction) {
+        setPrediction(snapshot.prediction);
+      }
+    }, UI_UPDATE_MS);
+
     socket.addEventListener('open', () => {
       setConnectionText('LIVE');
     });
 
     socket.addEventListener('close', () => {
       setBridgeConnected(false);
-      setConnectionText('MQTT bridge disconnected');
+      setMovementReady(false);
+      setThermoReady(false);
+      setBme680Ready(false);
+      setConnectionText('Disconnected');
     });
 
     socket.addEventListener('error', () => {
       setBridgeConnected(false);
-      setConnectionText('Cannot reach MQTT bridge');
+      setMovementReady(false);
+      setThermoReady(false);
+      setBme680Ready(false);
+      setConnectionText('Cannot reach bridge');
     });
 
     socket.addEventListener('message', (event) => {
@@ -87,82 +199,27 @@ export function RealtimeDashboardPage() {
         setBridgeConnected(Boolean(packet.connected));
         setMovementReady(Boolean(packet.has_movement));
         setThermoReady(Boolean(packet.has_thermo));
-        setConnectionText(packet.message || 'Status update');
+        setBme680Ready(Boolean(packet.has_bme680));
+        if (!packet.connected && packet.message) {
+          setConnectionText(packet.message);
+        }
         return;
       }
 
-      if (packet.type !== 'sensor' || !packet.topic || !packet.payload) {
-        return;
-      }
+      if (packet.type !== 'snapshot' || !packet.payload) return;
 
-      if (packet.topic === 'lofa-movement') {
-        const movement = packet.payload;
-        const timestamp = movement.ts ? new Date(movement.ts) : new Date();
-        const timeLabel = timestamp.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
-
-        setGyroData({
-          pitch: Number(movement.pitch || 0),
-          roll: Number(movement.roll || 0),
-          yaw: Number(movement.yaw || 0),
-        });
-        setAccelData({
-          x: Number(movement.x || 0),
-          y: Number(movement.y || 0),
-          z: Number(movement.z || 0),
-        });
-
-        setActivityData((current) => {
-          const next = [
-            ...current,
-            {
-              id: `activity-${movement.ts || Date.now()}`,
-              time: timeLabel,
-              x: Number(movement.x || 0),
-              y: Number(movement.y || 0),
-              z: Number(movement.z || 0),
-            },
-          ];
-          return next.slice(-HISTORY_LIMIT);
-        });
-        return;
-      }
-
-      if (packet.topic === 'lofa-thermo') {
-        const thermo = packet.payload;
-        const timestamp = thermo.ts ? new Date(thermo.ts) : new Date();
-        const timeLabel = timestamp.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
-        const nextTemp = Number(thermo.temperature || 0);
-        const nextHumidity = Number(thermo.humidity || 0);
-
-        setCurrentTemp(nextTemp);
-        setCurrentHumidity(nextHumidity);
-        setTempData((current) => {
-          const next = [
-            ...current,
-            {
-              id: `temp-${thermo.ts || Date.now()}`,
-              time: timeLabel,
-              temp: nextTemp,
-            },
-          ];
-          return next.slice(-HISTORY_LIMIT);
-        });
-      }
+      latestSnapshotRef.current = packet.payload;
     });
 
-    return () => socket.close();
+    return () => {
+      window.clearInterval(flushInterval);
+      socket.close();
+    };
   }, []);
 
-  const showThermo = thermoReady && (wantsTemp || wantsHumidity);
-  const showGyro = movementReady && wantsGyro;
+  const showThermo = wantsTemp || wantsHumidity;
+  const showMovement = wantsMovement;
+  const showAir = wantsAirQuality || wantsAirPressure;
 
   const activityLevel = useMemo(() => {
     if (!activityData.length) return 'Waiting';
@@ -172,29 +229,6 @@ export function RealtimeDashboardPage() {
     if (intensity >= 1.2) return t.activityLevels.medium || 'Medium';
     return t.activityLevels.low || 'Low';
   }, [activityData, t.activityLevels.high, t.activityLevels.low, t.activityLevels.medium]);
-
-  const temperatureTrend = useMemo(() => {
-    if (tempData.length < 2) {
-      return { direction: 'stable' as const, value: '0.0°C', context: '', className: 'text-gray-400' };
-    }
-
-    const latest = tempData[tempData.length - 1].temp;
-    const fiveMinutesAgoIndex = Math.max(0, tempData.length - 6);
-    const baseline = tempData[fiveMinutesAgoIndex].temp;
-    const diff = latest - baseline;
-    const sign = diff > 0 ? '+' : '';
-    return {
-      direction: diff > 0 ? ('up' as const) : diff < 0 ? ('down' as const) : ('stable' as const),
-      value: `${sign}${diff.toFixed(1)}°C`,
-      context: '',
-      className:
-        diff > 0
-          ? 'text-red-500'
-          : diff < 0
-            ? 'text-blue-500'
-            : 'text-gray-400',
-    };
-  }, [tempData]);
 
   if (!hasAnySelectedSensor) {
     return (
@@ -214,23 +248,6 @@ export function RealtimeDashboardPage() {
     );
   }
 
-  if (!showThermo && !showGyro) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-6 flex items-center justify-center">
-        <div className="text-center max-w-xl">
-          <Radio className="w-16 h-16 mx-auto mb-6 text-gray-300" />
-          <h2 className="text-2xl font-bold mb-3">Waiting for selected sensor data</h2>
-          <p className="text-gray-500 mb-3">
-            Realtime widgets appear only when the sensor is connected in Sensor Canvas and live MQTT data is arriving.
-          </p>
-          <p className="text-gray-500">
-            Bridge: <span className="font-mono">{bridgeConnected ? connectionText : MQTT_BRIDGE_URL}</span>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
@@ -242,7 +259,7 @@ export function RealtimeDashboardPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-[#FF7601]/20 px-4 py-2 rounded-full border border-[#FF7601]/30">
                 <div className="w-2 h-2 bg-[#FF7601] rounded-full animate-pulse" />
-                <span className="text-[#FF7601] text-sm font-semibold">{bridgeConnected ? t.liveStatus : connectionText}</span>
+                <span className="text-[#FF7601] text-sm font-semibold">{bridgeConnected ? 'LIVE' : connectionText}</span>
               </div>
             </div>
           </div>
@@ -255,10 +272,6 @@ export function RealtimeDashboardPage() {
               value={currentTemp.toFixed(1)}
               unit={t.unit.celsius}
               icon={Thermometer}
-              trend={temperatureTrend.direction}
-              trendValue={temperatureTrend.value}
-              trendContext={temperatureTrend.context}
-              trendClassName={temperatureTrend.className}
               color="#FF7601"
             />
           )}
@@ -268,22 +281,19 @@ export function RealtimeDashboardPage() {
               value={currentHumidity.toFixed(0)}
               unit="%"
               icon={Droplets}
-              trend="stable"
-              trendValue={t.trend.onPace}
-              trendContext=""
               color="#F3A26D"
             />
           )}
-          {showGyro && (
+          {showMovement && (
             <MetricCard
               title={t.activityLevel}
-              value={activityLevel}
+              value={prediction?.label || activityLevel}
               unit=""
               icon={Radio}
               color="#00809D"
             />
           )}
-          {showGyro && (
+          {showMovement && (
             <MetricCard
               title="X Accel"
               value={accelData.x.toFixed(3)}
@@ -292,7 +302,7 @@ export function RealtimeDashboardPage() {
               color="#0068C9"
             />
           )}
-          {showGyro && (
+          {showMovement && (
             <MetricCard
               title="Y Accel"
               value={accelData.y.toFixed(3)}
@@ -301,7 +311,7 @@ export function RealtimeDashboardPage() {
               color="#FF9900"
             />
           )}
-          {showGyro && (
+          {showMovement && (
             <MetricCard
               title="Z Accel"
               value={accelData.z.toFixed(3)}
@@ -310,17 +320,44 @@ export function RealtimeDashboardPage() {
               color="#FF2B2B"
             />
           )}
+          {showAir && wantsAirPressure && (
+            <MetricCard
+              title="Pressure"
+              value={currentPressure.toFixed(1)}
+              unit="hPa"
+              icon={CircleGauge}
+              color="#6495A7"
+            />
+          )}
+          {showAir && wantsAirQuality && (
+            <MetricCard
+              title="Air Quality"
+              value={currentAqi.toFixed(0)}
+              unit="IAQ"
+              icon={Wind}
+              color={currentAqi > 150 ? '#dc2626' : '#77ABA4'}
+            />
+          )}
+          {showAir && wantsAirQuality && (
+            <MetricCard
+              title="eCO₂"
+              value={currentEco2.toFixed(0)}
+              unit="ppm"
+              icon={Wind}
+              color="#82758e"
+            />
+          )}
         </div>
 
-        {(showThermo || showGyro) && (
+        {(showThermo || showMovement) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {showThermo && wantsTemp && <TemperatureChart data={tempData} title={t.temperatureChart} />}
-            {showGyro && <ActivityChart data={activityData} title={t.gyroscopeMovement} />}
+            {showMovement && <ActivityChart data={activityData} title={t.gyroscopeMovement} />}
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {showGyro && (
+          {showMovement && (
             <GyroscopeVisualization
               pitch={gyroData.pitch}
               roll={gyroData.roll}
@@ -328,11 +365,20 @@ export function RealtimeDashboardPage() {
               title={t.realTime3DMovement}
             />
           )}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Raw Broadcast</h3>
+              {prediction?.label && (
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#00809D]/10 text-[#00809D]">
+                  {prediction.label} · {(Number(prediction.confidence || 0) * 100).toFixed(1)}%
+                </span>
+              )}
+            </div>
+            <pre className="bg-gray-50 rounded-xl p-4 text-xs text-gray-700 overflow-auto max-h-[420px] whitespace-pre-wrap break-words">
+              {rawSnapshot ? JSON.stringify(rawSnapshot, null, 2) : 'Waiting for MQTT snapshot...'}
+            </pre>
+          </div>
         </div>
-
-        <footer className="mt-8 pt-6 border-t border-gray-200 text-center">
-          <p className="text-gray-500 text-sm">{t.footerText}</p>
-        </footer>
       </div>
     </div>
   );
