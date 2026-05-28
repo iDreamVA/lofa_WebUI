@@ -42,14 +42,15 @@ function SensorTemplateCard({ template }: { template: SensorTemplate }) {
     temperature: t.sensors.temperature,
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
+    airQuality: t.sensors.airQuality,
   };
 
   return (
     <motion.div
       ref={drag}
       whileHover={{ scale: 1.05 }}
-      className={`p-4 bg-gray-50 dark:bg-zinc-800 border-2 rounded-lg cursor-move transition-all shadow-sm ${
-        isDragging ? 'opacity-50 border-dashed' : 'border-gray-200 dark:border-zinc-700'
+      className={`p-4 bg-gray-50 border-2 rounded-lg cursor-move transition-all shadow-sm ${
+        isDragging ? 'opacity-50 border-dashed' : 'border-gray-200'
       }`}
       style={{ borderColor: isDragging ? template.color : undefined }}
     >
@@ -58,7 +59,7 @@ function SensorTemplateCard({ template }: { template: SensorTemplate }) {
           <Icon className="w-5 h-5" style={{ color: template.color }} />
         </div>
         <div className="flex-1">
-          <div className="font-medium text-sm text-gray-900 dark:text-white">{labelMap[template.type] || template.label}</div>
+          <div className="font-medium text-sm text-gray-900">{labelMap[template.type] || template.label}</div>
         </div>
       </div>
     </motion.div>
@@ -87,7 +88,7 @@ function PortDot({ node, port, visible, onStartConnection }: {
       }}
     >
       <div
-        className={`w-5 h-5 rounded-full border-2 border-white dark:border-zinc-900 transition-all ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`}
+        className={`w-5 h-5 rounded-full border-2 border-white transition-all ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`}
         style={{ backgroundColor: node.color, boxShadow: `0 0 10px ${node.color}90` }}
       />
     </div>
@@ -123,6 +124,7 @@ function SensorNodeCard({
     temperature: t.sensors.temperature,
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
+    airQuality: t.sensors.airQuality,
   };
 
   const ports: Port[] = ['top', 'right', 'bottom', 'left'];
@@ -262,6 +264,7 @@ function MobileSensorPicker({ onSelect, onClose }: {
     temperature: t.sensors.temperature,
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
+    airQuality: t.sensors.airQuality,
   };
 
   return (
@@ -270,14 +273,14 @@ function MobileSensorPicker({ onSelect, onClose }: {
       <motion.div
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-zinc-800 p-6 max-h-[80vh] overflow-y-auto"
+        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-white border-t border-gray-200 p-6 max-h-[80vh] overflow-y-auto"
       >
         <div className="max-w-md mx-auto">
           <div className="flex justify-center mb-4">
-            <div className="w-12 h-1 bg-gray-300 dark:bg-zinc-700 rounded-full" />
+            <div className="w-12 h-1 bg-gray-300 rounded-full" />
           </div>
-          <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">{t.sensors.catalog || 'Select Sensor'}</h2>
-          <p className="text-gray-500 dark:text-zinc-400 text-sm mb-6">{t.sensors.subtitle}</p>
+          <h2 className="text-xl font-bold mb-1 text-gray-900">{t.sensors.catalog || 'Select Sensor'}</h2>
+          <p className="text-gray-500 text-sm mb-6">{t.sensors.subtitle}</p>
           <div className="grid grid-cols-2 gap-3">
             {SENSOR_TEMPLATES.map((template) => {
               const Icon = SENSOR_ICON_MAP[template.icon] || Gauge;
@@ -293,7 +296,7 @@ function MobileSensorPicker({ onSelect, onClose }: {
                   <div className="p-3 rounded-xl" style={{ backgroundColor: `${template.color}30` }}>
                     <Icon className="w-6 h-6" style={{ color: template.color }} />
                   </div>
-                  <span className="text-xs font-semibold text-center text-gray-900 dark:text-white">
+                  <span className="text-xs font-semibold text-center text-gray-900">
                     {labelMap[template.type] || template.label}
                   </span>
                 </motion.button>
@@ -316,6 +319,7 @@ function MobilePuzzleGrid({ onToggleConnection, onDelete, onAddSensorClick }: {
     temperature: t.sensors.temperature,
     gyroscope: t.sensors.gyroscope,
     humidity: t.sensors.humidity,
+    airQuality: t.sensors.airQuality,
   };
 
   return (
@@ -323,7 +327,7 @@ function MobilePuzzleGrid({ onToggleConnection, onDelete, onAddSensorClick }: {
       <motion.button
         whileTap={{ scale: 0.98 }}
         onClick={onAddSensorClick}
-        className="w-full py-4 px-4 bg-gradient-to-r from-[#00809D] to-[#FF7601] rounded-2xl font-semibold text-white flex items-center justify-center gap-2 shadow-lg"
+        className="w-full py-4 px-4 bg-gradient-to-r from-[#a0b868] to-[#51553a] rounded-2xl font-semibold text-white flex items-center justify-center gap-2 shadow-lg"
       >
         <Plus className="w-5 h-5" />
         <span>Add Sensor</span>
@@ -331,8 +335,8 @@ function MobilePuzzleGrid({ onToggleConnection, onDelete, onAddSensorClick }: {
 
       {sensors.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Gauge className="w-16 h-16 mx-auto mb-4 opacity-20 text-gray-400 dark:text-zinc-600" />
-          <p className="text-gray-500 dark:text-zinc-500 text-sm">{t.sensors.dragInstruction}</p>
+          <Gauge className="w-16 h-16 mx-auto mb-4 opacity-20 text-gray-400" />
+          <p className="text-gray-500 text-sm">{t.sensors.dragInstruction}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -477,28 +481,43 @@ function Workspace({ onDrop, onMove, onToggleConnection, onDelete }: {
         drop(node);
         (workspaceRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }}
-      className="relative flex-1 bg-gray-50 dark:bg-zinc-950 border-2 border-dashed border-gray-300 dark:border-zinc-800 rounded-xl overflow-hidden"
+      className="relative flex-1 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl overflow-hidden"
       style={{ minHeight: '600px' }}
     >
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }}>
-        <EdgeLines edges={edges} sensors={sensors} />
-        {draggingConnection && fromNode && (
-          <path
-            d={`M ${getPortPosition(fromNode, draggingConnection.fromPort).x} ${getPortPosition(fromNode, draggingConnection.fromPort).y} L ${draggingConnection.mouseX} ${draggingConnection.mouseY}`}
-            stroke={fromNode.color}
-            strokeWidth={2}
-            strokeDasharray="4 4"
-            fill="none"
-            opacity={0.7}
-          />
-        )}
+        {/* Auto-connect chain lines between consecutive sensors */}
+        {sensors.length > 1 && sensors.slice(0, -1).map((node, i) => {
+          const next = sensors[i + 1];
+          const from = { x: node.x + NODE_CARD_WIDTH / 2, y: node.y + NODE_CARD_HEIGHT / 2 };
+          const to = { x: next.x + NODE_CARD_WIDTH / 2, y: next.y + NODE_CARD_HEIGHT / 2 };
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const cx = dx * 0.4;
+          const cy = dy * 0.4;
+          const path = `M ${from.x} ${from.y} C ${from.x + cx} ${from.y + cy}, ${to.x - cx} ${to.y - cy}, ${to.x} ${to.y}`;
+          const isLatest = i === sensors.length - 2;
+          return (
+            <path
+              key={`auto-${node.id}-${next.id}`}
+              d={path}
+              stroke="#51553a"
+              strokeWidth={2}
+              strokeDasharray="8 6"
+              fill="none"
+              opacity={0.5}
+              strokeLinecap="round"
+            >
+              <animate attributeName="stroke-dashoffset" from="0" to="-28" dur="1s" repeatCount="indefinite" />
+            </path>
+          );
+        })}
       </svg>
 
       {sensors.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-gray-400 dark:text-zinc-600">
+          <div className="text-center text-gray-400">
             <Gauge className="w-16 h-16 mx-auto mb-4 opacity-20" />
-            <p className="text-lg text-gray-500 dark:text-zinc-600">{t.sensors.dragInstruction}</p>
+            <p className="text-lg text-gray-500">{t.sensors.dragInstruction}</p>
           </div>
         </div>
       )}
@@ -558,11 +577,11 @@ export function SensorCanvasPage() {
 
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-white p-4 pb-20">
+      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-4 pb-20">
         <div className="max-w-md mx-auto">
           <header className="mb-6">
             <h1 className="text-2xl font-bold mb-1">{t.sensors.title}</h1>
-            <p className="text-gray-500 dark:text-zinc-400 text-sm">{t.sensors.subtitle}</p>
+            <p className="text-gray-500 text-sm">{t.sensors.subtitle}</p>
           </header>
           <MobilePuzzleGrid onToggleConnection={toggleSensorConnection} onDelete={removeSensor} onAddSensorClick={() => setShowMobileModal(true)} />
           <AnimatePresence>
@@ -575,11 +594,11 @@ export function SensorCanvasPage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-white p-6">
+      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-6">
         <div className="max-w-7xl mx-auto">
           <header className="mb-8">
             <h1 className="text-3xl font-bold mb-2">{t.sensors.title}</h1>
-            <p className="text-gray-500 dark:text-zinc-400">{t.sensors.subtitle}</p>
+            <p className="text-gray-500">{t.sensors.subtitle}</p>
           </header>
 
           <div className="flex gap-6">

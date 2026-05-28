@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Language, translations, Translations } from '../i18n/translations';
-import { Thermometer, Gauge, Droplets, LucideIcon } from 'lucide-react';
+import { Thermometer, Gauge, Droplets, Wind, LucideIcon } from 'lucide-react';
 
-type Theme = 'light' | 'dark';
 
 interface UserData {
   name: string;
@@ -33,15 +32,17 @@ export interface SensorEdge {
 }
 
 export const SENSOR_TEMPLATES = [
-  { type: 'temperature', label: 'Temperature', icon: 'Thermometer', color: '#FF7601' },
-  { type: 'gyroscope', label: 'Movement', icon: 'Gauge', color: '#00809D' },
-  { type: 'humidity', label: 'Humidity', icon: 'Droplets', color: '#F3A26D' },
+  { type: 'temperature', label: 'Temperature', icon: 'Thermometer', color: 'rgb(140, 150, 96)' },
+  { type: 'gyroscope', label: 'Movement', icon: 'Gauge', color: 'rgb(160, 184, 104)' },
+  { type: 'humidity', label: 'Humidity', icon: 'Droplets', color: 'rgb(145, 196, 195)' },
+  { type: 'airQuality', label: 'Air Quality', icon: 'Wind', color: 'rgb(119, 171, 164)' },
 ];
 
 export const SENSOR_ICON_MAP: Record<string, LucideIcon> = {
   Thermometer,
   Gauge,
   Droplets,
+  Wind,
 };
 
 export const NODE_CARD_WIDTH = 180;
@@ -51,8 +52,7 @@ interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
-  theme: Theme;
-  toggleTheme: () => void;
+
   t: Translations;
   userData: UserData | null;
   setUserData: (data: UserData) => void;
@@ -98,17 +98,10 @@ function loadUserData(): UserData | null {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>('en');
   const [userData, setUserDataState] = useState<UserData | null>(loadUserData);
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('theme') as Theme | null;
-    return saved ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  });
+
   const [sensors, setSensors] = useState<SensorNode[]>(loadSensors);
   const [edges, setEdges] = useState<SensorEdge[]>(loadEdges);
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('theme', theme);
-  }, [theme]);
 
   useEffect(() => {
     localStorage.setItem('lofa-sensors', JSON.stringify(sensors));
@@ -126,10 +119,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleLanguage = () => {
     setLanguage(prev => prev === 'en' ? 'th' : 'en');
-  };
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
   const setUserData = (data: UserData) => {
@@ -172,8 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     language,
     setLanguage,
     toggleLanguage,
-    theme,
-    toggleTheme,
+
     t: translations[language],
     userData,
     setUserData,

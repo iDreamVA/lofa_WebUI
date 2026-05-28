@@ -26,28 +26,28 @@ export function MetricCard({
 }: MetricCardProps) {
   const defaultTrendClass =
     trend === 'up'
-      ? 'text-emerald-500 dark:text-emerald-400'
+      ? 'text-emerald-500'
       : trend === 'down'
-        ? 'text-red-500 dark:text-red-400'
-        : 'text-gray-400 dark:text-zinc-400';
+        ? 'text-red-500'
+        : 'text-gray-400';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 relative overflow-hidden shadow-sm"
+      className="bg-white border border-gray-200 rounded-xl p-6 relative overflow-hidden shadow-sm"
     >
       <div className="absolute top-0 right-0 w-32 h-32 opacity-10" style={{ background: `radial-gradient(circle, ${color} 0%, transparent 70%)` }} />
 
       <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-gray-500 dark:text-zinc-400 text-sm mb-1">{title}</p>
+          <p className="text-gray-500 text-sm mb-1">{title}</p>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold" style={{ color }}>{value}</span>
-            <span className="text-gray-400 dark:text-zinc-500 text-lg">{unit}</span>
+            <span className="text-gray-400 text-lg">{unit}</span>
           </div>
         </div>
-        <div className="p-3 rounded-lg bg-gray-100 dark:bg-zinc-800/50">
+        <div className="p-3 rounded-lg bg-gray-100">
           <Icon className="w-6 h-6" style={{ color }} />
         </div>
       </div>
@@ -57,7 +57,7 @@ export function MetricCard({
           <span className={trendClassName || defaultTrendClass}>
             {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} {trendValue}
           </span>
-          {trendContext && <span className="text-gray-400 dark:text-zinc-500">{trendContext}</span>}
+          {trendContext && <span className="text-gray-400">{trendContext}</span>}
         </div>
       )}
     </motion.div>

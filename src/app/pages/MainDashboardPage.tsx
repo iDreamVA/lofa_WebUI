@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingDown, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export function MainDashboardPage() {
-  const { t, userData, bmi, theme } = useApp();
+  const { t, userData, bmi } = useApp();
   const navigate = useNavigate();
 
   if (!userData || !bmi) {
@@ -21,7 +21,6 @@ export function MainDashboardPage() {
   };
 
   const category = getBMICategory(bmi);
-  const isDark = theme === 'dark';
 
   const getBMIPercentage = (bmi: number) => {
     const min = 15;
@@ -49,20 +48,20 @@ export function MainDashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] dark:from-gray-900 dark:to-gray-950 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] p-4 md:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header - User Welcome */}
         <motion.header 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 md:mb-8 bg-white dark:bg-gray-800 rounded-2xl p-4 md:p-6 shadow-sm"
+          className="mb-6 md:mb-8 bg-white rounded-2xl p-4 md:p-6 shadow-sm"
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
                 Hello {userData.name || 'User'} 👋
               </h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base mt-1">
+              <p className="text-gray-500 text-sm md:text-base mt-1">
                 {t.onboarding.height}: {userData.height}{t.onboarding.cm} • {t.onboarding.weight}: {userData.weight}
                 {t.onboarding.kg} • {t.onboarding.age}: {userData.age} {t.onboarding.years}
               </p>
@@ -79,15 +78,15 @@ export function MainDashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-5 md:p-6 shadow-sm"
+            className="bg-white rounded-2xl p-5 md:p-6 shadow-sm"
           >
-            <h3 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">{t.bmi.title}</h3>
+            <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-6">{t.bmi.title}</h3>
 
             <div className="text-center mb-6">
               <div className="text-5xl md:text-6xl font-bold mb-2" style={{ color: category.color }}>
                 {bmi}
               </div>
-              <div className="text-base md:text-lg text-gray-600 dark:text-gray-400 mb-4">
+              <div className="text-base md:text-lg text-gray-600 mb-4">
                 {t.bmi.category}: <span style={{ color: category.color }} className="font-semibold">{category.label}</span>
               </div>
             </div>
@@ -95,7 +94,7 @@ export function MainDashboardPage() {
             {/* BMI Scale */}
             <div className="relative h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden mb-3">
               <div
-                className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#F3A26D] via-[#00809D] to-[#3a3a28] rounded-full"
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#3b82f6] via-[#00809D] via-[#FF7601] to-[#ef4444] rounded-full"
                 style={{ width: '100%' }}
               />
               <motion.div
@@ -107,7 +106,7 @@ export function MainDashboardPage() {
               />
             </div>
 
-            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex justify-between text-xs text-gray-500">
               <span>{t.bmi.underweight}</span>
               <span>{t.bmi.normal}</span>
               <span>{t.bmi.overweight}</span>
@@ -120,9 +119,9 @@ export function MainDashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-5 md:p-6 shadow-sm"
+            className="bg-white rounded-2xl p-5 md:p-6 shadow-sm"
           >
-            <h3 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">{t.posture.title}</h3>
+            <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">{t.posture.title}</h3>
 
             <div className="space-y-3">
               {postureAreas.map((area, index) => {
@@ -133,11 +132,11 @@ export function MainDashboardPage() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 + index * 0.1 }}
-                    className="flex items-center justify-between p-3 md:p-4 bg-gray-50 dark:bg-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    className="flex items-center justify-between p-3 md:p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <Icon className="w-5 h-5" style={{ color: area.color }} />
-                      <span className="font-medium text-gray-700 dark:text-gray-200 text-sm md:text-base">{area.area}</span>
+                      <span className="font-medium text-gray-700 text-sm md:text-base">{area.area}</span>
                     </div>
                     <span
                       className="text-xs md:text-sm font-semibold px-3 py-1 rounded-full"
@@ -160,11 +159,11 @@ export function MainDashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-5 md:p-6 shadow-sm"
+          className="bg-white rounded-2xl p-5 md:p-6 shadow-sm"
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-gray-100">{t.history.weightTrend}</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <h3 className="text-lg md:text-xl font-semibold text-gray-900">{t.history.weightTrend}</h3>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
               <TrendingDown className="w-4 h-4 text-[#00809D]" />
               <span>{t.history.lastWeek}</span>
             </div>
@@ -173,19 +172,19 @@ export function MainDashboardPage() {
           <div className="w-full h-64 md:h-80 overflow-x-auto">
             <ResponsiveContainer width="100%" height={320} minWidth={300}>
               <LineChart data={weightHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#27272a' : '#e5e7eb'} />
-                <XAxis dataKey="day" stroke={isDark ? '#71717a' : '#9ca3af'} style={{ fontSize: '12px' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" stroke="#9ca3af" style={{ fontSize: '12px' }} />
                 <YAxis
-                  stroke={isDark ? '#71717a' : '#9ca3af'}
+                  stroke="#9ca3af"
                   style={{ fontSize: '12px' }}
                   domain={[userData.weight - 3, userData.weight + 3]}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: isDark ? '#18181b' : '#fff',
-                    border: `1px solid ${isDark ? '#3f3f46' : '#e5e7eb'}`,
+                    backgroundColor: '#fff',
+                    border: '1px solid #e5e7eb',
                     borderRadius: '8px',
-                    color: isDark ? '#fff' : '#111',
+                    color: '#111',
                   }}
                 />
                 <Line

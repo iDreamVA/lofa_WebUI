@@ -40,13 +40,13 @@ export function AIAnalysis({ insights, title = 'AI Running Form Analysis' }: AIA
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3 }}
-      className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm"
+      className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
     >
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(0, 128, 157, 0.2)' }}>
           <Brain className="w-6 h-6" style={{ color: '#51553a' }} />
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+        <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
       </div>
 
       <div className="space-y-4">
@@ -60,7 +60,7 @@ export function AIAnalysis({ insights, title = 'AI Running Form Analysis' }: AIA
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 + index * 0.1 }}
-              className="bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded-lg p-4"
+              className="bg-gray-50 border border-gray-200 rounded-lg p-4"
             >
               <div className="flex gap-3">
                 <div className="flex-shrink-0">
@@ -68,7 +68,7 @@ export function AIAnalysis({ insights, title = 'AI Running Form Analysis' }: AIA
                 </div>
                 <div className="flex-1">
                   <h4 className={`font-semibold mb-1 ${colorClass}`}>{insight.title}</h4>
-                  <p className="text-gray-500 dark:text-zinc-400 text-sm">{insight.description}</p>
+                  <p className="text-gray-500 text-sm">{insight.description}</p>
                 </div>
               </div>
             </motion.div>
@@ -76,11 +76,11 @@ export function AIAnalysis({ insights, title = 'AI Running Form Analysis' }: AIA
         })}
       </div>
 
-      <div className="mt-6 pt-6 border-t border-gray-200 dark:border-zinc-800">
+      <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-zinc-400 text-sm">Overall Performance Score</span>
+          <span className="text-gray-500 text-sm">Overall Performance Score</span>
           <div className="flex items-center gap-2">
-            <div className="w-32 h-2 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: '85%' }}

@@ -23,6 +23,8 @@ export interface Translations {
   onboarding: {
     title: string;
     subtitle: string;
+    yourName: string;
+    namePlaceholder: string;
     height: string;
     weight: string;
     age: string;
@@ -69,6 +71,7 @@ export interface Translations {
     gyroscope: string;
     heartRate: string;
     humidity: string;
+    airQuality: string;
     dragInstruction: string;
     connected: string;
     disconnected: string;
@@ -126,6 +129,8 @@ export const translations: Record<Language, Translations> = {
     onboarding: {
       title: 'Welcome to LOFA',
       subtitle: 'Let\'s get to know you better',
+      yourName: 'Your Name',
+      namePlaceholder: 'Enter your name',
       height: 'Height',
       weight: 'Weight',
       age: 'Age',
@@ -172,6 +177,7 @@ export const translations: Record<Language, Translations> = {
       gyroscope: 'Movement',
       heartRate: 'Heart Rate',
       humidity: 'Humidity',
+      airQuality: 'Air Quality',
       dragInstruction: 'Drag sensors from the sidebar to the workspace',
       connected: 'Connected',
       disconnected: 'Disconnected',
@@ -237,6 +243,8 @@ export const translations: Record<Language, Translations> = {
     onboarding: {
       title: 'ยินดีต้อนรับสู่ LOFA',
       subtitle: 'มาทำความรู้จักคุณกันดีกว่า',
+      yourName: 'ชื่อของคุณ',
+      namePlaceholder: 'กรอกชื่อของคุณ',
       height: 'ส่วนสูง',
       weight: 'น้ำหนัก',
       age: 'อายุ',
@@ -280,9 +288,10 @@ export const translations: Record<Language, Translations> = {
       backSensors: 'เซ็นเซอร์หลัง',
       legSensors: 'เซ็นเซอร์ขา',
       temperature: 'อุณหภูมิ',
-      gyroscope: 'Movement',
+      gyroscope: 'เคลื่อนไหว',
       heartRate: 'อัตราการเต้นหัวใจ',
       humidity: 'ความชื้น',
+      airQuality: 'คุณภาพอากาศ',
       dragInstruction: 'ลากเซ็นเซอร์จากแถบด้านข้างไปยังพื้นที่ทำงาน',
       connected: 'เชื่อมต่อแล้ว',
       disconnected: 'ยังไม่ได้เชื่อมต่อ',

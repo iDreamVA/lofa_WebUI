@@ -10,7 +10,7 @@ function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        <div className="min-h-screen bg-[#fffef5] dark:bg-gray-950 transition-colors">
+        <div className="min-h-screen bg-[#fffef5] transition-colors">
           <Navigation />
           <Routes>
             <Route path="/" element={<OnboardingPage />} />

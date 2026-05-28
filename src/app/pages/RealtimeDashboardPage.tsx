@@ -175,7 +175,7 @@ export function RealtimeDashboardPage() {
 
   const temperatureTrend = useMemo(() => {
     if (tempData.length < 2) {
-      return { direction: 'stable' as const, value: '0.0°C', context: '', className: 'text-gray-400 dark:text-zinc-400' };
+      return { direction: 'stable' as const, value: '0.0°C', context: '', className: 'text-gray-400' };
     }
 
     const latest = tempData[tempData.length - 1].temp;
@@ -189,23 +189,23 @@ export function RealtimeDashboardPage() {
       context: '',
       className:
         diff > 0
-          ? 'text-red-500 dark:text-red-400'
+          ? 'text-red-500'
           : diff < 0
-            ? 'text-blue-500 dark:text-blue-400'
-            : 'text-gray-400 dark:text-zinc-400',
+            ? 'text-blue-500'
+            : 'text-gray-400',
     };
   }, [tempData]);
 
   if (!hasAnySelectedSensor) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-white p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-6 flex items-center justify-center">
         <div className="text-center max-w-md">
-          <Radio className="w-16 h-16 mx-auto mb-6 text-gray-300 dark:text-zinc-600" />
+          <Radio className="w-16 h-16 mx-auto mb-6 text-gray-300" />
           <h2 className="text-2xl font-bold mb-3">{t.sensors.noSensorsConnected || 'No Sensors Connected'}</h2>
-          <p className="text-gray-500 dark:text-zinc-400 mb-6">{t.sensors.noSensorsDesc || 'Add and connect sensors on the Sensor Configuration page to see live data here.'}</p>
+          <p className="text-gray-500 mb-6">{t.sensors.noSensorsDesc || 'Add and connect sensors on the Sensor Configuration page to see live data here.'}</p>
           <button
             onClick={() => navigate('/sensors')}
-            className="px-6 py-3 bg-gradient-to-r from-[#00809D] to-[#FF7601] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+            className="px-6 py-3 bg-gradient-to-r from-[#a0b868] to-[#51553a] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
           >
             {t.sensors.goToSensorPage || 'Configure Sensors'}
           </button>
@@ -216,14 +216,14 @@ export function RealtimeDashboardPage() {
 
   if (!showThermo && !showGyro) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-white p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-6 flex items-center justify-center">
         <div className="text-center max-w-xl">
-          <Radio className="w-16 h-16 mx-auto mb-6 text-gray-300 dark:text-zinc-600" />
+          <Radio className="w-16 h-16 mx-auto mb-6 text-gray-300" />
           <h2 className="text-2xl font-bold mb-3">Waiting for selected sensor data</h2>
-          <p className="text-gray-500 dark:text-zinc-400 mb-3">
+          <p className="text-gray-500 mb-3">
             Realtime widgets appear only when the sensor is connected in Sensor Canvas and live MQTT data is arriving.
           </p>
-          <p className="text-gray-500 dark:text-zinc-400">
+          <p className="text-gray-500">
             Bridge: <span className="font-mono">{bridgeConnected ? connectionText : MQTT_BRIDGE_URL}</span>
           </p>
         </div>
@@ -232,7 +232,7 @@ export function RealtimeDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#fffef5] to-[#f0ede0] text-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
           <div className="flex items-center justify-between">
@@ -330,8 +330,8 @@ export function RealtimeDashboardPage() {
           )}
         </div>
 
-        <footer className="mt-8 pt-6 border-t border-gray-200 dark:border-zinc-800 text-center">
-          <p className="text-gray-500 dark:text-zinc-500 text-sm">{t.footerText}</p>
+        <footer className="mt-8 pt-6 border-t border-gray-200 text-center">
+          <p className="text-gray-500 text-sm">{t.footerText}</p>
         </footer>
       </div>
     </div>

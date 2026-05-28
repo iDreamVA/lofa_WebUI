@@ -24,9 +24,9 @@ export function GyroscopeVisualization({ pitch, roll, yaw, title = 'Body Movemen
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
-      className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm"
+      className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
     >
-      <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white">{title}</h3>
+      <h3 className="text-xl font-semibold mb-6 text-gray-900">{title}</h3>
 
       <div className="flex flex-col items-center justify-center h-80">
         <div className="perspective-1000 mb-8">
@@ -73,16 +73,16 @@ export function GyroscopeVisualization({ pitch, roll, yaw, title = 'Body Movemen
         </div>
 
         <div className="grid grid-cols-3 gap-4 w-full">
-          <div className="bg-gray-100 dark:bg-zinc-800/50 rounded-lg p-4 text-center">
-            <p className="text-gray-500 dark:text-zinc-400 text-sm mb-1">Pitch</p>
+          <div className="bg-gray-100 rounded-lg p-4 text-center">
+            <p className="text-gray-500 text-sm mb-1">Pitch</p>
             <p className="text-[#00809D] text-xl font-bold">{pitch.toFixed(1)}°</p>
           </div>
-          <div className="bg-gray-100 dark:bg-zinc-800/50 rounded-lg p-4 text-center">
-            <p className="text-gray-500 dark:text-zinc-400 text-sm mb-1">Roll</p>
+          <div className="bg-gray-100 rounded-lg p-4 text-center">
+            <p className="text-gray-500 text-sm mb-1">Roll</p>
             <p className="text-[#00809D] text-xl font-bold">{roll.toFixed(1)}°</p>
           </div>
-          <div className="bg-gray-100 dark:bg-zinc-800/50 rounded-lg p-4 text-center">
-            <p className="text-gray-500 dark:text-zinc-400 text-sm mb-1">Yaw</p>
+          <div className="bg-gray-100 rounded-lg p-4 text-center">
+            <p className="text-gray-500 text-sm mb-1">Yaw</p>
             <p className="text-[#00809D] text-xl font-bold">{yaw.toFixed(1)}°</p>
           </div>
         </div>
