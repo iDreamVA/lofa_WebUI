@@ -35,7 +35,6 @@ type ThermoSample = {
 };
 
 type Bme680Sample = {
-  pressure_hpa?: number;
   gas_kohm?: number;
   eco2?: number;
   aqi?: number;
@@ -117,18 +116,24 @@ function getHeatIndexStatus(heatIndexC: number): MetricStatus {
   return { level: 'green', label: 'Normal', value: `${heatIndexC.toFixed(1)}°C`, detail: 'Comfortable heat index' };
 }
 
-function pressureToAltitudeM(pressureHpa: number) {
+function pressureKpaToHpa(pressureKpa: number) {
+  return pressureKpa * 10;
+}
+
+function pressureToAltitudeM(pressureKpa: number) {
+  const pressureHpa = pressureKpaToHpa(pressureKpa);
   return 44330 * (1 - Math.pow(pressureHpa / 1013.25, 0.1903));
 }
 
-function getPressureStatus(pressureHpa: number, altitudeM: number): MetricStatus {
+function getPressureStatus(pressureKpa: number, altitudeM: number): MetricStatus {
+  const pressureHpa = pressureKpaToHpa(pressureKpa);
   if (pressureHpa < 752) {
-    return { level: 'red', label: 'High altitude', value: `${pressureHpa.toFixed(0)} hPa`, detail: `~${Math.round(altitudeM)} m altitude context` };
+    return { level: 'red', label: 'High altitude', value: `${pressureKpa.toFixed(2)} kPa`, detail: `~${Math.round(altitudeM)} m altitude context` };
   }
   if (pressureHpa < 850) {
-    return { level: 'yellow', label: 'Watch', value: `${pressureHpa.toFixed(0)} hPa`, detail: `~${Math.round(altitudeM)} m, oxygen load rising` };
+    return { level: 'yellow', label: 'Watch', value: `${pressureKpa.toFixed(2)} kPa`, detail: `~${Math.round(altitudeM)} m, oxygen load rising` };
   }
-  return { level: 'green', label: 'Normal', value: `${pressureHpa.toFixed(0)} hPa`, detail: `~${Math.round(altitudeM)} m equivalent` };
+  return { level: 'green', label: 'Normal', value: `${pressureKpa.toFixed(2)} kPa`, detail: `~${Math.round(altitudeM)} m equivalent` };
 }
 
 function getAqiStatus(aqi: number, eco2: number): MetricStatus {
@@ -141,7 +146,8 @@ function getAqiStatus(aqi: number, eco2: number): MetricStatus {
   return { level: 'green', label: 'Good', value: `${aqi.toFixed(0)} IAQ`, detail: `eCO₂ ${eco2.toFixed(0)} ppm` };
 }
 
-function getEnvironmentStatus(pressureHpa: number, tempC: number, humidity: number, heatIndexC: number): MetricStatus {
+function getEnvironmentStatus(pressureKpa: number, tempC: number, humidity: number, heatIndexC: number): MetricStatus {
+  const pressureHpa = pressureKpaToHpa(pressureKpa);
   if ((pressureHpa < 752 && tempC >= 33) || heatIndexC >= 39.4) {
     return { level: 'red', label: 'Red action', value: 'High', detail: 'Pause, cool down, hydrate' };
   }
@@ -265,7 +271,7 @@ export function MainDashboardPage() {
   const [motionHistory, setMotionHistory] = useState<Array<{ timestamp: number; ax: number; ay: number; az: number; gx: number; gy: number; gz: number }>>([]);
   const [currentTemp, setCurrentTemp] = useState(0);
   const [currentHumidity, setCurrentHumidity] = useState(0);
-  const [currentPressure, setCurrentPressure] = useState(1013.25);
+  const [currentPressureKpa, setCurrentPressureKpa] = useState(101.325);
   const [currentAqi, setCurrentAqi] = useState(0);
   const [currentEco2, setCurrentEco2] = useState(0);
   const [prediction, setPrediction] = useState<PredictionSample | null>(null);
@@ -316,9 +322,7 @@ export function MainDashboardPage() {
       }
 
       if (snapshot.nano_ble?.pressure_kpa) {
-        setCurrentPressure(Number(snapshot.nano_ble.pressure_kpa) * 10);
-      } else if (snapshot.bme680?.pressure_hpa) {
-        setCurrentPressure(Number(snapshot.bme680.pressure_hpa));
+        setCurrentPressureKpa(Number(snapshot.nano_ble.pressure_kpa));
       }
 
       if (snapshot.prediction) {
@@ -478,14 +482,14 @@ export function MainDashboardPage() {
   );
 
   const altitudeM = useMemo(
-    () => pressureToAltitudeM(currentPressure),
-    [currentPressure],
+    () => pressureToAltitudeM(currentPressureKpa),
+    [currentPressureKpa],
   );
 
   const heatStatus = getHeatIndexStatus(heatIndexC);
-  const environmentStatus = getEnvironmentStatus(currentPressure, currentTemp, currentHumidity, heatIndexC);
+  const environmentStatus = getEnvironmentStatus(currentPressureKpa, currentTemp, currentHumidity, heatIndexC);
   const aqiStatus = getAqiStatus(currentAqi, currentEco2);
-  const pressureStatus = getPressureStatus(currentPressure, altitudeM);
+  const pressureStatus = getPressureStatus(currentPressureKpa, altitudeM);
   const fatigueStatus = getFatigueStatus(
     movementMetrics.impactRatio,
     movementMetrics.cadenceDrop,
@@ -563,7 +567,7 @@ export function MainDashboardPage() {
     },
     {
       tone: pressureStatus.level === 'red' ? ('danger' as const) : pressureStatus.level === 'yellow' ? ('warn' as const) : ('neutral' as const),
-      message: `Pressure is ${currentPressure.toFixed(0)} hPa (~${Math.round(altitudeM)} m equivalent), so altitude load is ${pressureStatus.label.toLowerCase()}.`,
+      message: `Nano pressure is ${currentPressureKpa.toFixed(2)} kPa (~${Math.round(altitudeM)} m equivalent), so altitude load is ${pressureStatus.label.toLowerCase()}.`,
     },
     {
       tone: !prediction?.label && fatigueStatus.level === 'red' ? ('danger' as const) : !prediction?.label && fatigueStatus.level === 'yellow' ? ('warn' as const) : ('neutral' as const),

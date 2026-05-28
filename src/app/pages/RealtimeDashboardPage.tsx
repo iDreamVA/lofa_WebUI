@@ -27,10 +27,13 @@ type ThermoSample = {
 };
 
 type Bme680Sample = {
-  pressure_hpa?: number;
   gas_kohm?: number;
   eco2?: number;
   aqi?: number;
+};
+
+type NanoBleSample = {
+  pressure_kpa?: number;
 };
 
 type PredictionSample = {
@@ -45,6 +48,7 @@ type SnapshotPayload = {
   motion?: MotionSample;
   thermo?: ThermoSample;
   bme680?: Bme680Sample;
+  nano_ble?: NanoBleSample;
   prediction?: PredictionSample;
   raw?: Record<string, unknown>;
 };
@@ -82,7 +86,7 @@ export function RealtimeDashboardPage() {
 
   const [currentTemp, setCurrentTemp] = useState(0);
   const [currentHumidity, setCurrentHumidity] = useState(0);
-  const [currentPressure, setCurrentPressure] = useState(0);
+  const [currentPressureKpa, setCurrentPressureKpa] = useState(0);
   const [currentAqi, setCurrentAqi] = useState(0);
   const [currentEco2, setCurrentEco2] = useState(0);
   const [prediction, setPrediction] = useState<PredictionSample | null>(null);
@@ -161,8 +165,11 @@ export function RealtimeDashboardPage() {
         );
       }
 
+      if (snapshot.nano_ble?.pressure_kpa) {
+        setCurrentPressureKpa(Number(snapshot.nano_ble.pressure_kpa || 0));
+      }
+
       if (snapshot.bme680) {
-        setCurrentPressure(Number(snapshot.bme680.pressure_hpa || 0));
         setCurrentAqi(Number(snapshot.bme680.aqi || 0));
         setCurrentEco2(Number(snapshot.bme680.eco2 || 0));
       }
@@ -323,8 +330,8 @@ export function RealtimeDashboardPage() {
           {showAir && wantsAirPressure && (
             <MetricCard
               title="Pressure"
-              value={currentPressure.toFixed(1)}
-              unit="hPa"
+              value={currentPressureKpa.toFixed(2)}
+              unit="kPa"
               icon={CircleGauge}
               color="#6495A7"
             />
